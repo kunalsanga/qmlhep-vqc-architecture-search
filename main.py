@@ -1,25 +1,27 @@
 import numpy as np
 from sklearn.datasets import make_moons
 
-from evolution_search import run_evolution_search
-from plots import plot_results
+from llm_search import run_llm_search
 
-# Dataset
+# ── Dataset ──────────────────────────────────────────────────────────────────
 X, y = make_moons(n_samples=30, noise=0.1)
 
-# Scale inputs to [-pi, pi]
+# Scale features to [0, π]
 X = np.pi * (X - X.min()) / (X.max() - X.min())
 
-# Convert labels to -1 and +1
+# Convert labels to {-1, +1}
 y = 2 * y - 1
 
-# Run evolutionary search
-best = run_evolution_search(
-    X,
-    y,
-    population_size=4,   # small population
-    generations=4        # small generations
-)
+# ── LLM-Guided Search ────────────────────────────────────────────────────────
+best, history = run_llm_search(X, y, iterations=6)
 
-print("\n===== FINAL BEST (EVOLUTION) =====")
-print(best)
+print("\n===== BEST (LLM-GUIDED) =====")
+print(f"  Architecture : {best['architecture']}")
+print(f"  Loss         : {best['loss']:.4f}")
+print(f"  Score        : {best['score']:.4f}")
+
+print("\n===== FULL AGENT HISTORY =====")
+for i, entry in enumerate(history):
+    print(f"  [{i+1}] score={entry['score']:.4f}  loss={entry['loss']:.4f}  "
+          f"layers={entry['architecture']['n_layers']}  "
+          f"entanglement={entry['architecture']['entanglement']}")
