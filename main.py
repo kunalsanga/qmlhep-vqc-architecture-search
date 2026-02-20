@@ -1,27 +1,44 @@
 import numpy as np
 from sklearn.datasets import make_moons
 
+from search import run_search
+from evolution_search import run_evolution_search
 from llm_search import run_llm_search
+from comparison_plot import plot_comparison
 
-# ── Dataset ──────────────────────────────────────────────────────────────────
+# ── Dataset ───────────────────────────────────────────────────────────────────
 X, y = make_moons(n_samples=30, noise=0.1)
-
-# Scale features to [0, π]
 X = np.pi * (X - X.min()) / (X.max() - X.min())
-
-# Convert labels to {-1, +1}
 y = 2 * y - 1
 
-# ── LLM-Guided Search ────────────────────────────────────────────────────────
-best, history = run_llm_search(X, y, iterations=6)
+# ── Run all three search strategies ──────────────────────────────────────────
+print("\n" + "="*60)
+print("  STAGE 1: Random Search")
+print("="*60)
+random_scores, _ = run_search(X, y, iterations=8)
 
-print("\n===== BEST (LLM-GUIDED) =====")
-print(f"  Architecture : {best['architecture']}")
-print(f"  Loss         : {best['loss']:.4f}")
-print(f"  Score        : {best['score']:.4f}")
+print("\n" + "="*60)
+print("  STAGE 2: Evolutionary Search")
+print("="*60)
+evolution_scores, _ = run_evolution_search(X, y, population_size=4, generations=4)
 
-print("\n===== FULL AGENT HISTORY =====")
-for i, entry in enumerate(history):
-    print(f"  [{i+1}] score={entry['score']:.4f}  loss={entry['loss']:.4f}  "
-          f"layers={entry['architecture']['n_layers']}  "
-          f"entanglement={entry['architecture']['entanglement']}")
+print("\n" + "="*60)
+print("  STAGE 3: LLM-Guided Search")
+print("="*60)
+llm_scores, best, history = run_llm_search(X, y, iterations=6)
+
+# ── Summary ───────────────────────────────────────────────────────────────────
+print("\n" + "="*60)
+print("  FINAL RESULTS SUMMARY")
+print("="*60)
+print(f"  Random Search     →  best score: {min(random_scores):.4f}  "
+      f"({len(random_scores)} evals)")
+print(f"  Evolutionary      →  best score: {min(evolution_scores):.4f}  "
+      f"({len(evolution_scores)} evals)")
+print(f"  LLM-Guided        →  best score: {min(llm_scores):.4f}  "
+      f"({len(llm_scores)} evals)")
+
+print(f"\n  LLM best architecture: {best['architecture']}")
+
+# ── Comparison Plot ───────────────────────────────────────────────────────────
+plot_comparison(random_scores, evolution_scores, llm_scores)

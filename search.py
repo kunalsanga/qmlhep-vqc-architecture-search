@@ -6,7 +6,17 @@ from evaluator import evaluate_structure, compute_score
 
 
 def run_search(X, y, iterations=10):
+    """
+    Random search — evaluates N independently sampled architectures.
 
+    Returns:
+        best_scores: list of best score seen so far at each evaluation step.
+                     Represents the convergence curve for plotting.
+        results:     full list of result dicts (for CSV export).
+    """
+
+    best_scores = []
+    best_so_far = float("inf")
     results = []
 
     for i in range(iterations):
@@ -17,29 +27,28 @@ def run_search(X, y, iterations=10):
         print("Architecture:", arch)
 
         circuit = build_circuit(arch)
-
         loss = train_architecture(circuit, arch, X, y)
 
         depth, total_gates, cnot = evaluate_structure(arch)
-        score = compute_score(loss, depth, cnot)
+        score = float(compute_score(loss, depth, cnot))
 
-        print("Loss:", float(loss))
-        print("Depth:", depth)
-        print("CNOT:", cnot)
-        print("Score:", float(score))
+        print(f"Loss: {float(loss):.4f}  |  Depth: {depth}  |  "
+              f"CNOT: {cnot}  |  Score: {score:.4f}")
 
         results.append({
             "architecture": arch,
             "loss": float(loss),
             "depth": depth,
             "cnot": cnot,
-            "score": float(score)
+            "score": score
         })
 
-    # Select best architecture
-    best = min(results, key=lambda x: x["score"])
+        # Track best so far (convergence curve)
+        if score < best_so_far:
+            best_so_far = score
+        best_scores.append(best_so_far)
 
-        # Save results to CSV
+    # Save full results to CSV
     with open("results.csv", "w", newline="") as f:
         writer = csv.DictWriter(
             f,
@@ -49,4 +58,4 @@ def run_search(X, y, iterations=10):
         for r in results:
             writer.writerow(r)
 
-    return best, results
+    return best_scores, results
