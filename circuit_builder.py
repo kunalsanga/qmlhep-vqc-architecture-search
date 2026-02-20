@@ -14,9 +14,9 @@ def build_circuit(architecture):
     @qml.qnode(dev)
     def circuit(weights, x):
 
-        # Encode input
+        # Encode input (pad with 0 if fewer features than qubits)
         for i in range(n_qubits):
-            qml.RY(x[i], wires=i)
+            qml.RY(x[i] if i < len(x) else 0.0, wires=i)
 
         # Variational layers
         for layer in range(n_layers):
@@ -35,7 +35,10 @@ def build_circuit(architecture):
                         qml.RZ(weights[layer, q, i], wires=q)
 
             # Entanglement block
-            if entanglement == "linear":
+            if entanglement == "none":
+                pass
+
+            elif entanglement == "linear":
                 for i in range(n_qubits - 1):
                     qml.CNOT(wires=[i, i + 1])
 

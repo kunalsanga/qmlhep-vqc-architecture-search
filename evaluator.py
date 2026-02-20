@@ -11,8 +11,12 @@ def evaluate_structure(architecture):
     rotation_count = n_layers * n_qubits * len(architecture["rotation_gates"])
 
     # CNOT count
-    if entanglement == "linear":
+    if entanglement == "none":
+        cnot_per_layer = 0
+
+    elif entanglement == "linear":
         cnot_per_layer = n_qubits - 1
+
     elif entanglement == "full":
         cnot_per_layer = n_qubits * (n_qubits - 1) // 2
 

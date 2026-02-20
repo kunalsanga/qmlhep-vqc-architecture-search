@@ -8,7 +8,7 @@ X, y = make_moons(n_samples=30, noise=0.1)
 X = np.pi * (X - X.min()) / (X.max() - X.min())
 y = 2*y - 1
 
-best, results = run_search(X, y, iterations=8)
+best, results = run_search(X, y, iterations=10)
 
 print("\n\n===== BEST ARCHITECTURE FOUND =====")
 print(best)
