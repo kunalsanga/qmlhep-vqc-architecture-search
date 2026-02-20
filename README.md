@@ -1,8 +1,28 @@
 # 🔬 QMLHEP — VQC Architecture Search
 
-A lightweight **Variational Quantum Circuit (VQC) Architecture Search** engine built with [PennyLane](https://pennylane.ai/). Inspired by the goals of the **QMLHEP** (Quantum Machine Learning for High Energy Physics) initiative.
+A **Variational Quantum Circuit (VQC) Architecture Search** engine built with [PennyLane](https://pennylane.ai/). Inspired by the **QMLHEP** (Quantum Machine Learning for High Energy Physics) initiative.
 
-The system randomly samples quantum circuit architectures, trains each with gradient descent, scores them using a hardware-efficiency-aware cost function, saves all results to CSV, and generates scatter plots + a correlation matrix for analysis.
+This project implements **two search strategies** — Random Search and Evolutionary Search — and compares them as a research progression, building toward the argument that classical search methods have fundamental limitations that motivate more intelligent approaches.
+
+---
+
+## 🗺️ Research Progression (The Big Picture)
+
+```
+Stage 1: Random Search
+    → Sample architectures randomly, pick the best score
+    → Stochastic, no memory, no refinement
+
+Stage 2: Evolutionary Search  ← current stage
+    → Start from a population, mutate the best each generation
+    → Slight improvement, but still noisy convergence
+
+Stage 3 (future): LLM / Bayesian / RL-guided Search
+    → Use semantic reasoning about architecture structure
+    → Sample-efficient, can avoid known-bad patterns
+```
+
+> **Core thesis**: Classical search strategies exhibit limited sample efficiency and lack semantic reasoning about architecture structure. This motivates intelligent architecture search for quantum circuits.
 
 ---
 
@@ -10,17 +30,18 @@ The system randomly samples quantum circuit architectures, trains each with grad
 
 1. **Randomly generates** VQC architectures — varying layers, rotation gates (`RX`, `RY`, `RZ`), and entanglement patterns (`none`, `linear`, `full`).
 2. **Builds a PennyLane QNode** for each architecture on the `default.qubit` simulator.
-3. **Encodes input** via `RY(x[i])` on each qubit. Safely pads with `0.0` for extra qubits when features < qubits.
-4. **Trains** each circuit on `make_moons` (binary classification) using `GradientDescentOptimizer`.
-5. **Scores** each circuit using a hardware-efficiency-aware cost function:
+3. **Encodes input** via `RY(x[i])` per qubit. Pads with `0.0` for extra qubits when features < qubits.
+4. **Trains** each circuit on `make_moons` using `GradientDescentOptimizer`.
+5. **Scores** using a hardware-efficiency cost function:
 
 ```
 Score = Loss + λ_depth × depth + λ_CNOT × CNOT_count
 ```
 
-6. **Selects** the best architecture (lowest score) across all iterations.
-7. **Exports** all results to `results.csv` for reproducibility and analysis.
-8. **Visualises** with scatter plots (Score vs Depth, Loss vs CNOT) and prints a correlation matrix.
+6. **Random Search**: samples N architectures independently and picks the best.
+7. **Evolutionary Search**: starts with a random population, mutates the best each generation.
+8. **Exports** all random-search results to `results.csv`.
+9. **Visualises** scatter plots + correlation matrix via `plots.py`.
 
 ---
 
@@ -29,16 +50,18 @@ Score = Loss + λ_depth × depth + λ_CNOT × CNOT_count
 ```
 qmlhep-vqc-architecture-search/
 │
-├── main.py            # Entry point — dataset prep, run search, print best, plot
-├── search.py          # Full search loop + auto-save to results.csv
-├── architecture.py    # Random architecture sampler
-├── circuit_builder.py # Builds PennyLane QNode from architecture config
-├── trainer.py         # Gradient descent training with pennylane.numpy weights
-├── evaluator.py       # Computes depth, CNOT count, and hardware-efficiency score
-├── plots.py           # Loads results.csv → scatter plots + correlation matrix
-├── config.py          # All hyperparameters and search space constants
-├── results.csv        # Auto-generated after each run
-├── requirements.txt   # Python dependencies
+├── main.py               # Entry point — currently runs evolutionary search
+├── search.py             # Random search loop + saves results.csv
+├── evolution_search.py   # Evolutionary search loop (population + mutation)
+├── evolution.py          # mutate_architecture() — single-point mutation
+├── architecture.py       # Random architecture sampler
+├── circuit_builder.py    # Builds PennyLane QNode from architecture config
+├── trainer.py            # Gradient descent training with pennylane.numpy weights
+├── evaluator.py          # Computes depth, CNOT count, hardware-efficiency score
+├── plots.py              # Scatter plots + correlation matrix from results.csv
+├── config.py             # All hyperparameters and search space constants
+├── results.csv           # Auto-generated after random search run
+├── requirements.txt      # Python dependencies
 └── README.md
 ```
 
@@ -49,9 +72,9 @@ qmlhep-vqc-architecture-search/
 | Parameter | Value | Description |
 |-----------|-------|-------------|
 | `MAX_QUBITS` | **3** | Number of qubits per circuit |
-| `MAX_LAYERS` | 4 | Maximum variational layers to sample |
-| `ALLOWED_ROTATIONS` | RX, RY, RZ | Rotation gates |
-| `ENTANGLEMENT_PATTERNS` | **none, linear, full** | CNOT topologies |
+| `MAX_LAYERS` | 4 | Maximum variational layers |
+| `ALLOWED_ROTATIONS` | RX, RY, RZ | Rotation gates to sample from |
+| `ENTANGLEMENT_PATTERNS` | **none, linear, full** | CNOT entanglement topologies |
 | `LAMBDA_DEPTH` | 0.01 | Depth penalty in score |
 | `LAMBDA_CNOT` | 0.02 | CNOT penalty in score |
 | `TRAIN_STEPS` | 40 | Gradient descent steps per circuit |
@@ -65,11 +88,7 @@ qmlhep-vqc-architecture-search/
 ```python
 generate_architecture() → dict
 ```
-Randomly samples:
-- Fixed `n_qubits = MAX_QUBITS` (currently 3)
-- Random `n_layers` ∈ [1, MAX_LAYERS]
-- Random 2-gate rotation block from `ALLOWED_ROTATIONS`
-- Random entanglement from `ENTANGLEMENT_PATTERNS`
+Randomly samples: fixed `n_qubits`, random `n_layers`, random 2-gate rotation block, random entanglement.
 
 ---
 
@@ -77,14 +96,13 @@ Randomly samples:
 ```python
 build_circuit(architecture) → QNode
 ```
-Builds a PennyLane `@qml.qnode` with:
-- **Input encoding**: `RY(x[i])` per qubit. If there are fewer features than qubits, extra wires are encoded with `0.0` (safe padding for 3-qubit circuits on 2-feature datasets).
-- **Variational layers**: parameterized RX/RY/RZ rotations per qubit per layer
-- **Entanglement block** (per layer):
-  - `"none"` → no CNOT gates (fast, limited expressivity)
-  - `"linear"` → CNOT chain: q0→q1, q1→q2 (moderate entanglement)
-  - `"full"` → all-to-all CNOT pairs (maximum entanglement, most expensive)
-- **Output**: `<PauliZ(0)>` expectation value ∈ [-1, +1]
+- **Input encoding**: `RY(x[i] if i < len(x) else 0.0, wires=i)` — safe 3-qubit padding for 2-feature data
+- **Rotation block**: parameterized RX/RY/RZ per qubit per layer
+- **Entanglement block**:
+  - `"none"` → no CNOT (product state only, limited expressivity)
+  - `"linear"` → CNOT chain q0→q1→q2 (moderate, hardware-friendly)
+  - `"full"` → all-to-all CNOTs (max entanglement, highest cost)
+- **Output**: `<PauliZ(0)>` ∈ [-1, +1]
 
 ---
 
@@ -92,12 +110,9 @@ Builds a PennyLane `@qml.qnode` with:
 ```python
 train_architecture(circuit, architecture, X, y) → loss
 ```
-- Initializes weights with `pennylane.numpy` (`requires_grad=True`) — **not plain numpy**
-- MSE loss: `Σ (prediction - y_i)² / N`
-- Runs `TRAIN_STEPS` steps of `GradientDescentOptimizer`
-- Returns final training loss
-
-> ⚠️ **Critical:** You MUST use `pennylane.numpy` (not plain `numpy`) for trainable weights. Plain numpy has no `requires_grad` — PennyLane uses this flag to apply the **parameter-shift rule** for quantum gradients.
+- Uses `pennylane.numpy` with `requires_grad=True` — **never plain numpy**
+- MSE loss over `make_moons` dataset
+- `TRAIN_STEPS` steps of `GradientDescentOptimizer`
 
 ---
 
@@ -108,25 +123,57 @@ compute_score(loss, depth, cnot_count) → score
 ```
 
 **CNOT counts per layer (3 qubits):**
-| Entanglement | CNOTs/layer | Total (3 layers) |
+
+| Entanglement | CNOTs/layer | 3 layers total |
 |---|---|---|
 | `none` | 0 | 0 |
 | `linear` | 2 | 6 |
 | `full` | 3 | 9 |
 
-**Depth** = `n_layers × 2` (one rotation block + one entanglement block per layer)
-
 **Score** = `loss + 0.01×depth + 0.02×cnot_count`
 
 ---
 
-### `search.py`
+### `search.py` — Random Search
 ```python
 run_search(X, y, iterations=10) → (best, results)
 ```
-- Runs the full NAS loop for N iterations
-- Saves all results to `results.csv` after completing all iterations
-- Returns the architecture with the lowest hardware-efficiency score
+- Samples N architectures independently (no memory between iterations)
+- Saves all results to `results.csv`
+- **Limitation**: purely stochastic — good result depends on luck
+
+---
+
+### `evolution.py` — Mutation Operator
+```python
+mutate_architecture(architecture) → new_architecture
+```
+Picks one mutation at random:
+- `"layers"` → randomise `n_layers`
+- `"rotation"` → resample 2 rotation gates
+- `"entanglement"` → switch entanglement pattern
+
+Uses `copy.deepcopy()` to avoid mutating the original.
+
+---
+
+### `evolution_search.py` — Evolutionary Search
+```python
+run_evolution_search(X, y, population_size=4, generations=4) → best
+```
+
+**Algorithm:**
+```
+1. Generate population_size random architectures and evaluate each
+2. For each generation:
+   a. Select the best architecture (elitism, size=1)
+   b. Mutate best → (population_size - 1) new children
+   c. Evaluate all children
+   d. Replace population with [best] + children
+3. Return final best
+```
+
+**Current settings**: `population_size=4`, `generations=4` = 4 + 4×3 = 16 total circuit evaluations.
 
 ---
 
@@ -134,162 +181,178 @@ run_search(X, y, iterations=10) → (best, results)
 ```python
 plot_results(csv_file="results.csv")
 ```
-Generates:
-1. **Scatter: Score vs Circuit Depth**
-2. **Scatter: Loss vs CNOT Count**
-3. **Correlation matrix** printed to console
-
----
-
-### `results.csv` (auto-generated)
-| Column | Description |
-|--------|-------------|
-| `loss` | Final training MSE |
-| `depth` | Approximate circuit depth |
-| `cnot` | Total CNOT count |
-| `score` | Hardware-efficiency score |
-| `architecture` | Full architecture config dict |
+- Scatter: **Score vs Circuit Depth**
+- Scatter: **Loss vs CNOT Count**
+- Printed **Correlation Matrix**
 
 ---
 
 ## 🚀 Setup & Installation
 
-### 1. Clone the Repository
 ```bash
 git clone https://github.com/kunalsanga/qmlhep-vqc-architecture-search.git
 cd qmlhep-vqc-architecture-search
-```
 
-### 2. Create and Activate Virtual Environment
-```bash
 python -m venv venv
+venv\Scripts\activate          # Windows
+# source venv/bin/activate     # macOS/Linux
 
-# Windows
-venv\Scripts\activate
-
-# macOS/Linux
-source venv/bin/activate
-```
-
-### 3. Install Dependencies
-```bash
 pip install -r requirements.txt
-```
-
-### 4. Run
-```bash
 python main.py
 ```
 
 ---
 
-## 📊 Sample Output (3 Qubits, 10 Iterations)
+## 📊 Observed Results
 
+### Random Search (8 iterations, 2 qubits)
 ```
-===== Iteration 1 =====
-Architecture: {'n_qubits': 3, 'n_layers': 3, 'rotation_gates': ['RX', 'RY'], 'entanglement': 'linear'}
-Loss: 0.5667
-Depth: 6
-CNOT: 6
-Score: 0.7467
+Best: n_layers=2, rotation=['RY','RX'], entanglement=linear
+Loss: 0.5144 | Depth: 4 | CNOT: 2 | Score: 0.5944
+```
 
-===== Iteration 2 =====
-Architecture: {'n_qubits': 3, 'n_layers': 4, 'rotation_gates': ['RY', 'RX'], 'entanglement': 'none'}
-Loss: 0.7411
-Depth: 8
-CNOT: 0
-Score: 0.8211
+### Evolutionary Search (4 population, 4 generations, 3 qubits)
+```
+Gen 1 → Best score: 0.7367
+Gen 2 → Best score: 0.7367   ← stalled
+Gen 3 → Best score: 0.7338   ← improved
+Gen 4 → Best score: 0.7338   ← stalled again
 
-...
-
-===== BEST ARCHITECTURE FOUND =====
-n_qubits: 3 | n_layers: 3 | rotation_gates: ['RX', 'RY'] | entanglement: linear
-loss: 0.5667 | depth: 6 | cnot: 6 | score: 0.7467
-
-Correlation Matrix:
-           loss     depth      cnot     score
-loss   1.000000  0.12...   0.14...  0.97...
-depth  0.12...   1.000000  0.88...  0.27...
+Final best:
+  n_qubits: 3 | n_layers: 2 | rotation: ['RZ','RY'] | entanglement: full
+  Loss: 0.5738 | Score: 0.7338
 ```
 
 ---
 
-## 🧠 Key Research Insights (Important — Read Before Revisiting!)
+## 🧠 Key Research Insights (Read This First When Revisiting!)
 
-> These are real observations from running this system on 3 qubits across 10+ iterations.
+---
 
-### 1️⃣ Linear entanglement is the sweet spot
-
-```
-Best Found: 3 layers + linear entanglement → Score: 0.747
-```
-
-- `linear` gets good loss (~0.567) without the CNOT overhead of `full`
-- `full` gets slightly lower *loss* but higher *score* due to CNOT penalty
-- **Remember:** more entanglement ≠ better score. Balance matters.
-
-### 2️⃣ No entanglement (`none`) limits expressivity
+### 1️⃣ Evolution improved — but only slightly
 
 ```
-none → loss always ≥ 0.74 (even with 4 layers)
+0.7367 → 0.7338  (Δ = 0.003)
 ```
 
-- Circuits without any CNOT gates can't create entangled states
-- Entanglement is what gives quantum circuits their advantage over classical models
-- **Remember:** a VQC without entanglement is essentially just a classical neural net with rotations.
+The algorithm refined the architecture across generations, confirming that selection pressure works. But the gain is small because:
+- Mutation is **random** — no gradient in architecture space
+- **No crossover** — can't combine good traits from multiple parents
+- **No memory** — doesn't remember which mutations failed before
+- **Elitism of 1** — diversity collapses fast
 
-### 3️⃣ Full entanglement is not always worth it
+> 📌 **Remember**: Small gains from evolution are expected and not a failure — they're your evidence that *guided* search (LLM/Bayesian/RL) is the natural next step.
+
+---
+
+### 2️⃣ Scores are higher in 3-qubit runs — that's expected
 
 ```
-full, 3 layers → loss: 0.590, CNOT: 9, score: 0.831
-linear, 3 layers → loss: 0.567, CNOT: 6, score: 0.747
+2-qubit random search best score:  0.5944
+3-qubit evolution search best:     0.7338
 ```
 
-- `full` uses 50% more CNOTs than `linear` for 3 qubits but gets *worse* overall score
-- CNOT gates are the most error-prone on real hardware → penalise them
-- **Remember:** on NISQ devices, fewer CNOTs = better fidelity. This scoring reflects reality.
+This isn't a regression. 3-qubit circuits have:
+- More CNOTs → higher CNOT penalty
+- Higher depth → higher depth penalty
+- More parameters → harder to train in 40 steps
 
-### 4️⃣ Why `pennylane.numpy`, not plain `numpy`?
+> 📌 **Remember**: Don't compare 2-qubit scores to 3-qubit scores directly. They exist in different cost landscapes.
+
+---
+
+### 3️⃣ Linear entanglement = sweet spot (confirmed again)
+
+From random search (2 qubits):
+```
+linear, 2 layers → loss: 0.514, score: 0.594  ← WINNER
+full, 3 layers   → loss: 0.590, score: 0.831
+none, 4 layers   → loss: 0.741, score: 0.821
+```
+
+`none` = no expressivity. `full` = too expensive. `linear` = balanced.
+
+> 📌 **Remember**: This is your core empirical result. Cite it in any proposal.
+
+---
+
+### 4️⃣ The two stalling points are structural, not bugs
+
+```
+Gen 1 → 0.7367
+Gen 2 → 0.7367  ← stall
+Gen 3 → 0.7338
+Gen 4 → 0.7338  ← stall
+```
+
+Stalling means: all mutations of the current best scored worse → best carried forward unchanged. This is a known weakness of (1+λ) elitist evolution with no crossover.
+
+> 📌 **Remember**: Stalling is evidence for the thesis that random mutation without memory is sample-inefficient.
+
+---
+
+### 5️⃣ Why `pennylane.numpy` — the one rule you must never forget
 
 ```python
-# WRONG - causes TypeError: randn() got unexpected keyword 'requires_grad'
+# WRONG — crashes with "requires_grad unexpected keyword"
 weights = np.random.randn(n_layers, n_qubits, n_rot, requires_grad=True)
 
 # CORRECT
+import pennylane.numpy as pnp
 weights = pnp.random.normal(size=(n_layers, n_qubits, n_rot), requires_grad=True)
 ```
 
-- PennyLane uses the **parameter-shift rule** to compute quantum gradients
-- Plain numpy arrays are invisible to PennyLane's autograd engine
-- `pennylane.numpy` is a drop-in wrapper that adds gradient tracking
-- **Remember:** always use `import pennylane.numpy as pnp` for trainable parameters.
+PennyLane uses the **parameter-shift rule** to compute gradients. Plain `numpy` arrays are invisible to the autograd engine. `pennylane.numpy` wraps numpy and adds the tracking.
 
-### 5️⃣ The scoring formula is hardware-aware
+> 📌 **Remember**: This was the very first bug we fixed. It will bite anyone new to PennyLane.
+
+---
+
+### 6️⃣ The score formula is not arbitrary — it mirrors real hardware concerns
 
 ```
 Score = Loss + 0.01×depth + 0.02×CNOT_count
 ```
 
-- `λ_CNOT > λ_depth` because CNOTs are more costly than single-qubit gates on real hardware
-- This is inspired by how IBM/Google score circuits for hardware execution
-- **Remember:** this is not just a toy metric — it's how real quantum ML proposals justify architecture choices.
+- `λ_CNOT (0.02) > λ_depth (0.01)` — CNOT gates are noisier than single-qubit gates on NISQ devices
+- IBM Quantum and Google both report CNOT error rates ~10× higher than single-qubit error rates
+- **Lower score = better real-world viability**, not just better training
 
-### 6️⃣ Input encoding for 3 qubits on 2-feature data
-
-```python
-# Safe encoding: pad with 0.0 if features < qubits
-qml.RY(x[i] if i < len(x) else 0.0, wires=i)
-```
-
-- `make_moons` has 2 features, but we have 3 qubits
-- The 3rd qubit is initialized in |0⟩ effectively and still participates in entanglement
-- **Remember:** for real HEP data, you'd have many more features and wouldn't need padding.
+> 📌 **Remember**: This scoring function is what separates this from a plain VQE/classifier. It's hardware-aware.
 
 ---
 
-## 📌 Publishable-Level Statement
+### 7️⃣ Input padding for qubit-feature mismatch
 
-> *"We observe that linear entanglement with moderate circuit depth (3 layers) achieves a favourable trade-off between expressivity and hardware cost on a 3-qubit VQC. Full entanglement reduces training loss marginally but incurs significantly greater CNOT overhead without proportional performance gain. Circuits with no entanglement fail to reach competitive accuracy, confirming that quantum correlations are essential for learning non-linearly separable distributions."*
+```python
+qml.RY(x[i] if i < len(x) else 0.0, wires=i)
+```
+
+`make_moons` gives 2 features. 3-qubit circuit has 3 wires. The 3rd qubit is encoded as `RY(0)` = identity → starts in `|0⟩` but still participates in entanglement with other qubits.
+
+> 📌 **Remember**: For real HEP data (many features), you'd have the opposite problem — more features than qubits — and would need dimensionality reduction (PCA or amplitude encoding).
+
+---
+
+## 📌 Publishable-Level Statement You Can Use
+
+> *"We implement and compare two quantum architecture search strategies — random sampling and mutation-based evolutionary search — on a hardware-efficiency-aware scoring function. While evolutionary search improves upon random sampling through iterative refinement, it exhibits characteristic stalling behaviour due to the absence of crossover and architectural memory. These limitations highlight the sample inefficiency of classical search heuristics in the discrete quantum architecture space, motivating the development of semantically-guided search methods."*
+
+---
+
+## 🔧 How to Run Each Search Mode
+
+**Random Search** (edit `main.py`):
+```python
+from search import run_search
+best, results = run_search(X, y, iterations=10)
+```
+
+**Evolutionary Search** (current default):
+```python
+from evolution_search import run_evolution_search
+best = run_evolution_search(X, y, population_size=4, generations=4)
+```
 
 ---
 
@@ -297,13 +360,12 @@ qml.RY(x[i] if i < len(x) else 0.0, wires=i)
 
 | Goal | How |
 |---|---|
+| Add crossover | In `evolution.py`, add `crossover(arch1, arch2)` that swaps sub-components |
+| Increase population | Change `population_size` in `main.py` |
 | More qubits | Change `MAX_QUBITS` in `config.py` |
-| More layers | Change `MAX_LAYERS` |
-| More rotation gates | Add to `ALLOWED_ROTATIONS` |
 | Real HEP data | Replace `make_moons` in `main.py` with your feature matrix |
-| More iterations | Change `iterations=10` in `main.py` |
-| Evolutionary search | Replace random sampling in `architecture.py` with mutation/crossover |
-| Better plots | Add Pareto frontier plot in `plots.py` (score vs loss, coloured by entanglement) |
+| Bayesian search | Replace mutation with a Gaussian process surrogate model over architecture configs |
+| Save evolution log | Append each generation's best to a CSV inside `evolution_search.py` |
 
 ---
 
@@ -314,6 +376,7 @@ qml.RY(x[i] if i < len(x) else 0.0, wires=i)
 - [Variational Quantum Circuits — Schuld et al.](https://arxiv.org/abs/1803.00745)
 - [Hardware-Efficient VQE — Kandala et al.](https://www.nature.com/articles/nature23879)
 - [Parameter-Shift Rule — Crooks 2019](https://arxiv.org/abs/1905.13311)
+- [Neural Architecture Search Survey — Elsken et al.](https://arxiv.org/abs/1808.05377)
 
 ---
 

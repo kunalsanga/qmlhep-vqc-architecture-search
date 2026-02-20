@@ -1,17 +1,25 @@
 import numpy as np
 from sklearn.datasets import make_moons
-from search import run_search
+
+from evolution_search import run_evolution_search
+from plots import plot_results
 
 # Dataset
 X, y = make_moons(n_samples=30, noise=0.1)
 
+# Scale inputs to [-pi, pi]
 X = np.pi * (X - X.min()) / (X.max() - X.min())
-y = 2*y - 1
 
-best, results = run_search(X, y, iterations=10)
+# Convert labels to -1 and +1
+y = 2 * y - 1
 
-print("\n\n===== BEST ARCHITECTURE FOUND =====")
+# Run evolutionary search
+best = run_evolution_search(
+    X,
+    y,
+    population_size=4,   # small population
+    generations=4        # small generations
+)
+
+print("\n===== FINAL BEST (EVOLUTION) =====")
 print(best)
-
-from plots import plot_results
-plot_results()
