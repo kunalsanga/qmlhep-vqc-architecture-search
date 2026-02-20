@@ -12,3 +12,6 @@ best, results = run_search(X, y, iterations=8)
 
 print("\n\n===== BEST ARCHITECTURE FOUND =====")
 print(best)
+
+from plots import plot_results
+plot_results()

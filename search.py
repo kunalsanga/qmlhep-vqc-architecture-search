@@ -1,3 +1,4 @@
+import csv
 from architecture import generate_architecture
 from circuit_builder import build_circuit
 from trainer import train_architecture
@@ -37,5 +38,15 @@ def run_search(X, y, iterations=10):
 
     # Select best architecture
     best = min(results, key=lambda x: x["score"])
+
+        # Save results to CSV
+    with open("results.csv", "w", newline="") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=["loss", "depth", "cnot", "score", "architecture"]
+        )
+        writer.writeheader()
+        for r in results:
+            writer.writerow(r)
 
     return best, results

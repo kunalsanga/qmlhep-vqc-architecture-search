@@ -1,0 +1,9 @@
+loss,depth,cnot,score,architecture
+0.7538958204442192,2,1,0.7938958204442192,"{'n_qubits': 2, 'n_layers': 1, 'rotation_gates': ['RZ', 'RY'], 'entanglement': 'linear'}"
+0.5651225520605223,8,4,0.7251225520605222,"{'n_qubits': 2, 'n_layers': 4, 'rotation_gates': ['RY', 'RZ'], 'entanglement': 'full'}"
+0.5143695996194358,4,2,0.5943695996194359,"{'n_qubits': 2, 'n_layers': 2, 'rotation_gates': ['RY', 'RX'], 'entanglement': 'linear'}"
+0.9962464236427399,2,1,1.0362464236427398,"{'n_qubits': 2, 'n_layers': 1, 'rotation_gates': ['RY', 'RX'], 'entanglement': 'full'}"
+0.5960476871952183,6,3,0.7160476871952184,"{'n_qubits': 2, 'n_layers': 3, 'rotation_gates': ['RY', 'RZ'], 'entanglement': 'full'}"
+0.5504533623993839,6,3,0.670453362399384,"{'n_qubits': 2, 'n_layers': 3, 'rotation_gates': ['RX', 'RY'], 'entanglement': 'full'}"
+0.5358774247434839,8,4,0.6958774247434838,"{'n_qubits': 2, 'n_layers': 4, 'rotation_gates': ['RZ', 'RY'], 'entanglement': 'linear'}"
+0.8524602771346248,2,1,0.8924602771346248,"{'n_qubits': 2, 'n_layers': 1, 'rotation_gates': ['RY', 'RZ'], 'entanglement': 'linear'}"
