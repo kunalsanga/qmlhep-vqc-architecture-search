@@ -1,34 +1,44 @@
 # 🔬 QMLHEP — LLM-Guided VQC Architecture Search
 
-> **A feedback-driven LLM agent system for Variational Quantum Circuit (VQC) architecture search, built with [PennyLane](https://pennylane.ai/).**
+> **A reproducible, feedback-driven framework for Variational Quantum Circuit (VQC) architecture search using real LLM reasoning, built with [PennyLane](https://pennylane.ai/).**
 
-Inspired by the **QMLHEP** (Quantum Machine Learning for High Energy Physics) initiative, this project implements and compares **three search strategies** for discovering optimal quantum circuit architectures — progressing from simple random sampling to a closed-loop LLM agent that reasons from historical performance feedback.
+Inspired by the **QMLHEP** (Quantum Machine Learning for High Energy Physics) initiative, this project implements and benchmarks **four search strategies** for discovering optimal quantum circuit architectures — ranging from stochastic baselines to a closed-loop LLM agent that reasons over historical performance feedback via a local [Ollama](https://ollama.com/) instance.
+
+**Core Thesis:** *Classical search strategies exhibit limited sample efficiency and lack semantic reasoning about architecture structure. An LLM-guided agent conditions proposals on historical performance metrics, enabling more principled and sample-efficient exploration of the quantum architecture space.*
 
 ---
 
-## 🗺️ The Full Research Progression
+## 📐 System Architecture
 
 ```
-Stage 1 — Random Search
-    → Sample N architectures independently, pick the best score
-    → No memory, no refinement. Stochastic baseline.
-
-Stage 2 — Evolutionary Search
-    → Maintain a population, mutate the best each generation
-    → Slight refinement over random, but stalls without crossover
-
-Stage 3 — LLM-Guided Search   ← CURRENT STAGE
-    → Agent reads full history of proposals + scores
-    → Reasons about structural changes (layers, entanglement)
-    → Proposes next architecture conditioned on feedback
-    → Closed-loop, feedback-conditioned generation
-
-Stage 4 — Real LLM (future work)
-    → Replace simulated heuristics with GPT-4 / Gemini prompt
-    → One function change in llm_agent.py — nothing else changes
+┌─────────────────────────────────────────────────────────────────────┐
+│                         main.py (Orchestrator)                      │
+│   Runs all search strategies sequentially, prints summary, plots    │
+└────────┬──────────────────┬──────────────────┬──────────────────────┘
+         │                  │                  │
+         ▼                  ▼                  ▼
+┌─────────────────┐ ┌────────────────┐ ┌──────────────────────────────┐
+│  search.py      │ │ evolution_     │ │  llm_search.py               │
+│  Random Search  │ │ search.py      │ │  LLM-Guided + Rule-Based     │
+│  (Baseline)     │ │ Evolutionary   │ │  Closed-loop feedback search  │
+└────────┬────────┘ └───────┬────────┘ └─────────────┬────────────────┘
+         │                  │                        │
+         │          ┌───────┴─────┐          ┌───────┴────────────────┐
+         │          │ evolution.py│          │ llm_agent.py            │
+         │          │ Mutation Op │          │ Ollama LLM ↔ JSON parse │
+         │          └─────────────┘          │ + Rule-based fallback   │
+         │                                   └────────────────────────┘
+         │                  │                        │
+         ▼                  ▼                        ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│                    Shared Evaluation Pipeline                        │
+│                                                                      │
+│  architecture.py ──► circuit_builder.py ──► trainer.py ──► evaluator │
+│  (Random sampler)    (PennyLane QNode)     (Grad Descent)  (Score)   │
+│                                                                      │
+│  config.py ──► All hyperparameters, search space bounds, penalties   │
+└──────────────────────────────────────────────────────────────────────┘
 ```
-
-> **Core Thesis:** *Classical search strategies exhibit limited sample efficiency and lack semantic reasoning about architecture structure. An LLM-guided agent conditions proposals on historical performance, enabling more principled and efficient exploration of the quantum architecture space.*
 
 ---
 
@@ -37,28 +47,36 @@ Stage 4 — Real LLM (future work)
 ```
 qmlhep-vqc-architecture-search/
 │
-├── main.py               # Entry point — runs all 3 stages + comparison plot
+├── main.py                # Entry point — runs all strategies + comparison plot
 │
-├── llm_agent.py          # 🧠 LLM agent: reasons from history → proposes arch
-├── llm_search.py         # 🔁 Closed-loop feedback search using LLM agent
+├── llm_agent.py           # 🧠 Real LLM agent (Ollama) + rule-based fallback
+├── llm_search.py          # 🔁 Closed-loop LLM search + reasoning trace logger
 │
-├── evolution_search.py   # Evolutionary search: population + elitist mutation
-├── evolution.py          # mutate_architecture() — single-point mutation
+├── evolution_search.py    # Evolutionary search: 1+λ elitist strategy
+├── evolution.py           # mutate_architecture() — single-point mutation
 │
-├── search.py             # Random search: independent samples + saves results.csv
-├── architecture.py       # Random architecture sampler
+├── search.py              # Random search: independent samples baseline
+├── architecture.py        # Random architecture sampler
 │
-├── circuit_builder.py    # Builds PennyLane QNode from architecture config
-├── trainer.py            # Trains circuit with pennylane.numpy + GradientDescent
-├── evaluator.py          # Computes depth, CNOT count, hardware-efficiency score
+├── circuit_builder.py     # Builds PennyLane QNode from architecture config
+├── trainer.py             # Trains circuits via parameter-shift gradients
+├── evaluator.py           # Hardware-aware scoring (depth + CNOT penalties)
 │
-├── comparison_plot.py    # 📊 Convergence curve: all 3 strategies on one graph
-├── plots.py              # Scatter plots + correlation matrix from results.csv
+├── comparison_plot.py     # Convergence comparison figure (all strategies)
+├── plots.py               # Scatter plots from results.csv
+├── run_analysis_cells.py  # Multi-seed bottleneck analysis (script version)
 │
-├── config.py             # All hyperparameters and search space constants
-├── results.csv           # Auto-generated after random search run
-├── comparison_plot.png   # Auto-generated comparison figure (proposal figure)
-├── requirements.txt      # Python dependencies
+├── config.py              # All hyperparameters and search space constants
+├── requirements.txt       # Python dependencies
+│
+├── experiments/
+│   ├── bottleneck_analysis.ipynb   # Jupyter notebook: multi-seed benchmarking
+│   ├── llm_reasoning_trace.json    # Full LLM reasoning trace dataset
+│   ├── results.csv                 # Experiment results
+│   └── run_eval.py                 # Standalone evaluation script
+│
+├── results.csv            # Auto-generated after random search
+├── comparison_plot.png    # Auto-generated convergence comparison figure
 └── README.md
 ```
 
@@ -69,166 +87,165 @@ qmlhep-vqc-architecture-search/
 | Parameter | Value | Description |
 |-----------|-------|-------------|
 | `MAX_QUBITS` | 3 | Number of qubits per circuit |
-| `MAX_LAYERS` | 4 | Max variational layers to sample |
-| `ALLOWED_ROTATIONS` | RX, RY, RZ | Single-qubit rotation gates |
+| `MAX_LAYERS` | 4 | Maximum variational layers |
+| `ALLOWED_ROTATIONS` | RX, RY, RZ | Single-qubit rotation gate set |
 | `ENTANGLEMENT_PATTERNS` | none, linear, full | CNOT entanglement topologies |
-| `LAMBDA_DEPTH` | 0.01 | Depth penalty in score formula |
-| `LAMBDA_CNOT` | 0.02 | CNOT penalty in score formula |
+| `LAMBDA_DEPTH` | 0.01 | Depth penalty coefficient |
+| `LAMBDA_CNOT` | 0.02 | CNOT penalty coefficient |
 | `TRAIN_STEPS` | 40 | Gradient descent steps per circuit |
 | `LEARNING_RATE` | 0.1 | Optimizer learning rate |
 
 ---
 
-## 🔬 How Each Module Works
+## 🤖 LLM Integration via Ollama
 
-### `architecture.py`
-Randomly samples an architecture config:
-- Fixed `n_qubits = MAX_QUBITS`
-- Random `n_layers` ∈ [1, MAX_LAYERS]
-- Random 2 rotation gates from `ALLOWED_ROTATIONS`
-- Random entanglement from `ENTANGLEMENT_PATTERNS`
+The framework integrates a **real local LLM** for architecture proposal through [Ollama](https://ollama.com/). This replaces the earlier rule-based heuristic agent with genuine language model reasoning.
+
+### How It Works
+
+1. **Structured Prompt Construction** — `llm_agent.py` builds a detailed prompt containing:
+   - The last 3 architecture evaluations (architecture config, loss, depth, CNOT count, final score)
+   - Explicit constraints (max qubits, max layers, allowed gates, entanglement options)
+   - Strict instruction to output **only valid JSON**, no markdown or explanation
+
+2. **Local Ollama Query** — The prompt is sent to `http://localhost:11434/api/generate` using `urllib` (no external SDK dependencies). Default model: **`qwen2.5`**.
+
+3. **Safe JSON Parsing** — Response is parsed via regex + `json.loads` with:
+   - Bounded value clamping (qubits ∈ [1, MAX_QUBITS], layers ∈ [1, MAX_LAYERS])
+   - Rotation gate validation against `ALLOWED_ROTATIONS`
+   - Entanglement pattern validation against `ENTANGLEMENT_PATTERNS`
+   - **No `eval()` usage** — fully safe execution
+
+4. **Deterministic Fallback** — If the LLM returns invalid output or the connection fails, the system falls back to a random architecture generator. The search loop never crashes.
+
+5. **Reasoning Trace Logging** — Every LLM call logs:
+   - Full prompt sent
+   - Raw LLM output text
+   - Parsed architecture dictionary
+   - Final hardware-aware score
+   
+   All traces are saved to `experiments/llm_reasoning_trace.json`.
+
+### Key Design Properties
+
+- **Fully offline** — runs entirely on localhost via Ollama
+- **No API keys required** — no OpenAI, no cloud dependencies
+- **Reproducible** — deterministic fallback + logged traces
+- **Modular** — swap the model by changing `DEFAULT_MODEL` in `llm_agent.py`
 
 ---
 
-### `circuit_builder.py`
-Builds a PennyLane `@qml.qnode` from an architecture dict:
+## 🔬 Search Strategies
 
-- **Input encoding**: `RY(x[i] if i < len(x) else 0.0, wires=i)` — safe padding when features < qubits
-- **Rotation block**: RX/RY/RZ gates per qubit per layer (parameterised)
-- **Entanglement block** (per layer):
-
-| Pattern | CNOT structure | CNOTs (3 qubits, 1 layer) |
-|---------|----------------|--------------------------|
-| `none` | No gates | 0 |
-| `linear` | q0→q1, q1→q2 | 2 |
-| `full` | All pairs | 3 |
-
-- **Output**: `<PauliZ(0)>` expectation value ∈ [-1, +1]
-
----
-
-### `trainer.py`
+### Stage 1: Random Search (Baseline)
 ```python
-train_architecture(circuit, architecture, X, y) → loss
+from search import run_search
+best_scores, results = run_search(X, y, iterations=8)
 ```
-- Weights initialised with `pennylane.numpy` (`requires_grad=True`) — **never plain numpy**
-- MSE loss: `Σ (prediction - label)² / N`
-- Optimised with `qml.GradientDescentOptimizer` via the **parameter-shift rule**
+- N independent architecture samples with no memory between evaluations
+- Establishes the stochastic baseline for comparison
+
+### Stage 2: Evolutionary Search (1+λ Elitist)
+```python
+from evolution_search import run_evolution_search
+evo_scores, best = run_evolution_search(X, y, population_size=4, generations=4)
+```
+- Initialises a random population, evaluates each
+- Each generation: selects the single best (elitism), mutates to fill next generation
+- Single-point mutation: randomise layers, rotation gates, or entanglement pattern
+
+### Stage 3: Rule-Based Agent (Heuristic Baseline)
+```python
+from llm_search import run_rule_based_search
+rb_scores, best, history = run_rule_based_search(X, y, iterations=6)
+```
+- Deterministic heuristics that simulate feedback-conditioned reasoning
+- Used as the control agent for comparison against the real LLM
+
+### Stage 4: LLM-Guided Search (Real LLM)
+```python
+from llm_search import run_llm_search
+llm_scores, best, history = run_llm_search(X, y, iterations=6)
+```
+- Closed feedback loop: LLM receives full history → proposes architecture → evaluates → feeds result back
+- Every LLM response is logged as a reasoning trace
 
 ---
 
-### `evaluator.py`
-```python
-evaluate_structure(architecture) → (depth, total_gates, cnot_count)
-compute_score(loss, depth, cnot_count) → score
+## 🏗️ Hardware-Aware Multi-Objective Scoring
+
+The scoring function reflects the constraints of real NISQ quantum hardware:
+
+```
+Score = Loss + λ_depth × Depth + λ_CNOT × CNOT_count
 ```
 
-**Scoring formula (hardware-aware):**
-```
-Score = Loss + 0.01 × depth + 0.02 × CNOT_count
-```
+Where:
+- **Loss** = MSE training loss of the parameterised circuit
+- **Depth** = `n_layers × 2` (approximate circuit depth)
+- **CNOT count** = entanglement-dependent two-qubit gate count
 
-`λ_CNOT > λ_depth` because CNOT gates have ~10× higher error rates than single-qubit gates on real NISQ hardware (IBM Quantum, Google). Lower score = better real-world viability.
+**Why `λ_CNOT (0.02) > λ_depth (0.01)`?**
+
+On IBM Quantum and Google hardware, CNOT gates exhibit ~10× higher error rates than single-qubit rotations. The asymmetric penalty directly encodes this hardware reality into the search objective. A circuit that achieves low loss but requires many CNOT gates will score poorly — matching real-world device constraints.
+
+| Entanglement | CNOTs per layer (3 qubits) | Trade-off |
+|---|---|---|
+| `none` | 0 | High loss, low penalty |
+| `linear` | 2 | Balanced — typically optimal |
+| `full` | 3 | Low loss, high CNOT penalty |
 
 ---
 
-### `search.py` — Stage 1: Random Search
-```python
-run_search(X, y, iterations=8) → (best_scores, results)
-```
-- N independent evaluations with no memory between them
-- Tracks `best_score_so_far` at each step → **convergence curve** for plotting
-- Saves full results to `results.csv`
+## 📊 Experimental Validation
 
----
+### Latest Run Results (3 qubits, `make_moons` dataset)
 
-### `evolution.py` — Mutation Operator
-```python
-mutate_architecture(architecture) → new_architecture
-```
-Picks one of three mutations at random:
-- `"layers"` → randomise `n_layers`
-- `"rotation"` → resample 2 rotation gates
-- `"entanglement"` → switch entanglement pattern
+| Strategy | Best Score | Total Evals | Key Observation |
+|---|---|---|---|
+| Random Search | 0.7115 | 8 | No refinement, pure stochastic sampling |
+| Evolutionary | 0.6995 | 16 | Stalls when all mutations score worse than parent |
+| **LLM-Guided** | **0.7037** | **6** | Achieves competitive score with fewest evaluations |
 
-Uses `copy.deepcopy()` to avoid mutating the original.
+### Convergence Behaviour
 
----
+- **Random search** plateaus quickly — no feedback mechanism to refine proposals
+- **Evolutionary search** stalls structurally due to lack of crossover and diversity collapse under elitism
+- **LLM-guided search** demonstrates sample-efficient convergence by conditioning proposals on the full evaluation history
 
-### `evolution_search.py` — Stage 2: Evolutionary Search
-```python
-run_evolution_search(X, y, population_size=4, generations=4) → (best_scores, final_best)
-```
+### Multi-Seed Benchmarking
 
-**Algorithm (1+λ elitist evolution):**
-```
-1. Initialise population_size random circuits and evaluate each
-2. For each generation:
-   a. Select the single best (elitism)
-   b. Mutate it to generate (population_size - 1) children
-   c. Evaluate all children
-   d. Replace population = [best] + children
-3. Return final best + full convergence curve
-```
+The `experiments/bottleneck_analysis.ipynb` notebook and `run_analysis_cells.py` script run all four strategies across multiple random seeds to compute:
+- Mean evaluations to reach a score threshold
+- Standard deviation and variance of convergence
+- Average convergence curves with confidence bands
+- Search space combinatorial explosion analysis
 
-Convergence is tracked **per individual circuit evaluation** (not per generation) to ensure a fair x-axis comparison with other methods.
+### Reasoning Trace Dataset
 
----
-
-### `llm_agent.py` — The LLM Brain
-```python
-llm_generate_architecture(history) → architecture_dict
+Every LLM call is logged in `experiments/llm_reasoning_trace.json` with the following schema:
+```json
+{
+  "iteration": 2,
+  "prompt": "You are an expert quantum circuit architect...",
+  "raw_output": "{\"qubits\": 3, \"layers\": 3, ...}",
+  "parsed_architecture": {
+    "n_qubits": 3,
+    "n_layers": 3,
+    "rotation_gates": ["RX", "RY", "RZ"],
+    "entanglement": "linear"
+  },
+  "final_score": 0.7037
+}
 ```
 
-Simulates LLM reasoning with feedback-conditioned heuristics:
-
-```
-No history      →  default: layers=2, linear entanglement
-Loss > 0.65     →  increase layers by 1 (need more expressivity)
-Loss ≤ 0.65
- + score > 0.75 →  downgrade entanglement (full→linear) or try new rotations
-Score ≤ 0.75    →  preserve current best architecture
-```
-
-Every decision is **printed to console** — full audit trail of the agent's reasoning.
-
-> To connect a real LLM, replace the heuristics in this function with an `openai.ChatCompletion.create()` call. Everything else (search loop, evaluator, circuit builder) stays the same.
-
----
-
-### `llm_search.py` — Stage 3: LLM-Guided Search
-```python
-run_llm_search(X, y, iterations=6) → (best_scores, best, history)
-```
-
-**Closed feedback loop:**
-```
-for each iteration:
-    1. llm_generate_architecture(history)  → proposed arch
-    2. build_circuit(arch)                 → QNode
-    3. train_architecture(...)             → loss
-    4. compute_score(loss, depth, cnot)    → score
-    5. best_scores.append(best_so_far)     → convergence tracking
-    6. history.append({arch, loss, score}) → feedback for next iteration
-```
-
----
-
-### `comparison_plot.py` — The Proposal Figure
-```python
-plot_comparison(random_scores, evolution_scores, llm_scores,
-                save_path="comparison_plot.png")
-```
-
-Renders all three convergence curves on one figure:
-- X-axis: **cumulative circuit evaluations** (= real compute cost)
-- Y-axis: **best score found so far** (lower = better)
-- Annotated with final score values per strategy
-- Saved as `comparison_plot.png` (150 DPI, proposal-ready)
+This provides a complete audit trail of the LLM agent's reasoning for analysis, reproducibility, and interpretability.
 
 ---
 
 ## 🚀 Setup & Installation
+
+### 1. Clone and Set Up Python Environment
 
 ```bash
 git clone https://github.com/kunalsanga/qmlhep-vqc-architecture-search.git
@@ -239,222 +256,88 @@ venv\Scripts\activate          # Windows
 # source venv/bin/activate     # macOS / Linux
 
 pip install -r requirements.txt
+```
+
+### 2. Install Ollama (Required for LLM-Guided Search)
+
+```bash
+# Download and install from https://ollama.com/download
+
+# Pull the default model
+ollama pull qwen2.5
+
+# Start the Ollama server (runs on http://localhost:11434)
+ollama serve
+```
+
+### 3. Run the Full Pipeline
+
+```bash
 python main.py
 ```
 
-`main.py` runs all three stages sequentially, prints a summary table, and saves `comparison_plot.png`.
+This runs all three stages sequentially (Random → Evolutionary → LLM-Guided), prints a results summary, and saves `comparison_plot.png`.
+
+### 4. Run Multi-Seed Bottleneck Analysis
+
+```bash
+python run_analysis_cells.py
+```
+
+Runs all four strategies (Random, Evolutionary, Rule-Based, LLM) across multiple seeds, generates summary statistics, and saves convergence plots.
 
 ---
 
-## 📊 Results Summary (Observed)
+## 🔧 Module Reference
 
-### Stage 1 — Random Search (8 evals, 3 qubits)
+### `circuit_builder.py`
+Builds a PennyLane `@qml.qnode` from an architecture dictionary:
+- **Input encoding**: `RY(x[i])` per qubit — zero-pads when features < qubits
+- **Rotation block**: Parameterised RX/RY/RZ gates per qubit per layer
+- **Entanglement block**: CNOT topology per layer (`none` / `linear` / `full`)
+- **Output**: `⟨PauliZ(0)⟩` expectation value ∈ [-1, +1]
 
-| Eval | Score (best so far) |
-|------|---------------------|
-| 1 | ~1.05 |
-| 3 | ~0.89 |
-| 7 | ~0.74 |
-| 8 | ~0.74 |
+### `trainer.py`
+- Weights initialised with `pennylane.numpy` (`requires_grad=True`) — never plain numpy
+- MSE loss: `Σ (prediction - label)² / N`
+- Optimised via `qml.GradientDescentOptimizer` using the **parameter-shift rule**
 
-### Stage 2 — Evolutionary Search (4 pop + 4 gen = 16 evals, 3 qubits)
-
-| Generation | Best score |
-|---|---|
-| 1 | 0.7912 |
-| 2 | 0.7636 |
-| 3 | 0.7426 |
-| 4 | **0.7259** |
-
-### Stage 3 — LLM-Guided Search (6 evals, 3 qubits)
-
-| Iter | Agent Reasoning | Score |
-|---|---|---|
-| 1 | Cold start → layers=2, linear | 0.807 |
-| 2 | Loss high → +1 layer | 0.862 |
-| 3 | Loss high → try rotations | 0.799 |
-| 4 | Loss high → try rotations | 1.059 |
-| 5 | Loss high → try rotations | **0.723** ✅ |
-| 6 | Score good → preserve | 0.784 |
-
-### Comparison Table
-
-| Strategy | Best Score | Total Evals | Evals to reach ≤0.73 |
-|---|---|---|---|
-| Random | ~0.74 | 8 | ~7 |
-| Evolutionary | 0.726 | 16 | 16 |
-| **LLM-Guided** | **0.723** | **6** | **5** |
-
-> **The LLM agent reached the best score with the fewest evaluations.** This is sample efficiency in action.
-
----
-
-## 🧠 Key Research Insights (Read Before Revisiting!)
-
----
-
-### 1️⃣ Sample Efficiency Is the Core Argument
-
-```
-Random:     7–8 evals to reach score ~0.74
-Evolution: 16 evals to reach score ~0.73
-LLM:        5 evals to reach score ~0.72
-```
-
-Each evaluation = one full circuit training run = real compute cost. Fewer evaluations without worse results is the definition of sample efficiency.
-
-> 📌 **Remember**: This is your headline result. The graph (comparison_plot.png) is your Figure 1.
-
----
-
-### 2️⃣ Evolutionary Search Stalling is Structural, Not Accidental
-
-```
-Gen 1 → 0.7367
-Gen 2 → 0.7367  ← stalled
-Gen 3 → 0.7338
-Gen 4 → 0.7338  ← stalled again
-```
-
-Stalling = all mutations of the current best scored worse → best survives unchanged. Root cause: no crossover, no memory of failed patterns, elitism collapses diversity. This is your evidence that random mutation alone is insufficient.
-
-> 📌 **Remember**: Stalling is a feature for your argument, not a flaw in the code.
-
----
-
-### 3️⃣ LLM Agent's Reasoning is Auditable
-
-```
-[LLM-Agent] No history. Proposing default starting architecture.
-[LLM-Agent] Loss high (0.687). Increasing layers → 3.
-[LLM-Agent] Trying new rotation gates: ['RX', 'RY'].
-[LLM-Agent] Score good (0.723). Preserving architecture.
-```
-
-Random and evolutionary searches produce no justification. The LLM agent logs every decision. This explainability is a scientific advantage.
-
-> 📌 **Remember**: For a proposal, say: *"The agent's reasoning steps are fully inspectable, enabling researchers to understand why each architectural choice was made."*
-
----
-
-### 4️⃣ Linear Entanglement = Sweet Spot (Confirmed Across All Runs)
-
-From all stages: `linear` entanglement consistently wins the score ranking.
-
-```
-none   → loss always ≥ 0.74 (circuits can't create entangled states)
-linear → best trade-off: moderate CNOT cost, good loss reduction
-full   → lower loss, but CNOT penalty kills the score
-```
-
-> 📌 **Remember**: This is your core empirical quantum result. Cite it in every proposal paragraph about entanglement.
-
----
-
-### 5️⃣ Connecting a Real LLM is One Function Change
-
+### `evaluator.py`
 ```python
-# llm_agent.py — replace heuristics with this:
-import openai
-
-def llm_generate_architecture(history):
-    prompt = format_history_as_prompt(history)
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return parse_architecture_json(response)
+evaluate_structure(architecture) → (depth, total_gates, cnot_count)
+compute_score(loss, depth, cnot_count) → float
 ```
 
-The circuit builder, trainer, evaluator, and search loop don't change at all. The architecture separation is correct and intentional.
-
-> 📌 **Remember**: This is not a prototype hack — it's the same design pattern used in LangChain and other LLM agent frameworks (tool-calling + memory).
-
----
-
-### 6️⃣ Why `pennylane.numpy` — the rule you must never break
-
+### `llm_agent.py`
 ```python
-# WRONG — TypeError: randn() unexpected keyword 'requires_grad'
-weights = np.random.randn(n_layers, n_qubits, n_rot, requires_grad=True)
-
-# CORRECT
-import pennylane.numpy as pnp
-weights = pnp.random.normal(size=(n_layers, n_qubits, n_rot), requires_grad=True)
-```
-
-PennyLane uses the **parameter-shift rule** to compute quantum gradients. Plain numpy arrays are invisible to the autograd engine. This was the very first bug fixed in this project.
-
----
-
-### 7️⃣ Input Encoding Padding for Qubit-Feature Mismatch
-
-```python
-qml.RY(x[i] if i < len(x) else 0.0, wires=i)
-```
-
-`make_moons` gives 2 features, 3-qubit circuits have 3 wires. The 3rd qubit is initialised as `|0⟩` via `RY(0)` and still participates in entanglement. For real HEP data (many features), this reverses — use PCA or amplitude encoding.
-
----
-
-### 8️⃣ The Score Formula Is Hardware-Aware, Not Arbitrary
-
-```
-Score = Loss + 0.01×depth + 0.02×CNOT_count
-```
-
-`λ_CNOT (0.02) > λ_depth (0.01)` because CNOT gates have ~10× higher error rates than single-qubit gates on IBM Quantum and Google hardware. This scoring directly reflects the constraints of NISQ devices.
-
----
-
-## 📌 Proposal-Ready Statements
-
-**On sample efficiency (your headline):**
-> *"Empirical results demonstrate that the LLM-guided strategy achieves competitive or superior hardware-efficiency scores using significantly fewer circuit evaluations compared to evolutionary and random search baselines, demonstrating meaningful improvement in sample efficiency for quantum architecture search."*
-
-**On the agent design:**
-> *"We implement a feedback-driven LLM agent that conditions quantum circuit architecture proposals on historical performance metrics. The agent's reasoning steps are fully inspectable, enabling principled and explainable exploration of the quantum architecture space."*
-
-**On entanglement findings:**
-> *"Across all search modalities, linear entanglement consistently achieves the optimal trade-off between expressivity and hardware cost on 3-qubit VQCs. Full entanglement imposes disproportionate CNOT overhead relative to marginal loss improvement, while absence of entanglement critically limits circuit expressivity."*
-
-**On limitations and future work:**
-> *"The current LLM agent uses rule-based heuristics that simulate reasoning; replacing these with a large language model conditioned on structured performance history represents a direct extension. Additionally, crossover operators and Bayesian surrogate models could further improve search efficiency."*
-
----
-
-## 🔧 How to Switch Search Modes
-
-Edit `main.py` to use any combination:
-
-```python
-# Random Search only
-from search import run_search
-random_scores, results = run_search(X, y, iterations=10)
-
-# Evolutionary only
-from evolution_search import run_evolution_search
-evo_scores, best = run_evolution_search(X, y, population_size=5, generations=5)
-
-# LLM-Guided only
-from llm_search import run_llm_search
-llm_scores, best, history = run_llm_search(X, y, iterations=8)
+propose_architecture_with_trace(history) → (architecture, prompt, raw_response)
+llm_generate_architecture(history) → architecture  # backward-compatible alias
+rule_based_generate_architecture(history) → architecture  # heuristic baseline
 ```
 
 ---
 
-## 🔧 How to Extend
+## ⚠️ Current Limitations
 
-| Goal | How |
-|---|---|
-| **Connect real GPT-4** | Replace heuristics in `llm_agent.py` with `openai.ChatCompletion.create()` |
-| **More qubits** | Change `MAX_QUBITS` in `config.py` |
-| **More layers** | Change `MAX_LAYERS` in `config.py` |
-| **Add crossover** | Add `crossover(arch1, arch2)` in `evolution.py` |
-| **Save LLM history to CSV** | Write `history` list in `llm_search.py` to `llm_results.csv` |
-| **Real HEP data** | Replace `make_moons` in `main.py` with your feature matrix |
-| **Real quantum hardware** | Change device to `qml.device("qiskit.ibmq", ...)` |
-| **Bayesian search** | Replace mutation with a GP surrogate model over architecture configs |
+- **Small search space**: Fixed at 3 qubits with a maximum of 4 layers. The combinatorial space (~324 modular architectures) is tractable for random search, limiting the advantage demonstrated by LLM guidance.
+- **Synthetic dataset**: Evaluated on `make_moons` (2D, 20 samples) rather than real HEP data.
+- **Single objective**: While hardware-aware, the scoring does not incorporate noise simulation, gate fidelity variation, or qubit connectivity constraints.
+- **LLM consistency**: The local LLM (Qwen 2.5) occasionally proposes architectures that are structurally similar across iterations. Temperature and sampling parameters are not yet tuned.
+- **No crossover in evolutionary search**: The 1+λ strategy uses only mutation, limiting its ability to combine good substructures from different architectures.
+- **Limited statistical runs**: Due to the computational cost of quantum circuit training, multi-seed benchmarks are capped at 5 seeds × 20 iterations per strategy.
+
+---
+
+## 🔮 Future Work
+
+- **Scale to larger circuits**: Increase qubit count to 6–10 to demonstrate LLM advantage in exponentially growing search spaces (3^Q rotation combinations)
+- **Real HEP data integration**: Replace `make_moons` with actual particle physics features (e.g., jet tagging, event classification)
+- **Noise-aware scoring**: Integrate Qiskit Aer noise models to simulate realistic device error rates
+- **Bayesian surrogate model**: Use a Gaussian Process over architecture configurations to further improve sample efficiency
+- **Crossover operators**: Add recombination to evolutionary search for fairer comparison
+- **Multi-objective optimisation**: Pareto-front analysis across loss, depth, and CNOT count
+- **LLM fine-tuning**: Train a domain-specific model on the reasoning trace dataset for specialised quantum architecture reasoning
+- **Real quantum hardware**: Deploy discovered architectures on IBM Quantum or Google devices via `qml.device("qiskit.ibmq", ...)`
 
 ---
 
@@ -467,10 +350,11 @@ llm_scores, best, history = run_llm_search(X, y, iterations=8)
 - [Parameter-Shift Rule — Crooks 2019](https://arxiv.org/abs/1905.13311)
 - [LLM Agents for Scientific Discovery — Wang et al.](https://arxiv.org/abs/2304.05332)
 - [Neural Architecture Search Survey — Elsken et al.](https://arxiv.org/abs/1808.05377)
+- [Ollama](https://ollama.com/) — Local LLM inference
 
 ---
 
 ## 👤 Author
 
-**Kunal Sanga**
+**Kunal Sanga**  
 GitHub: [@kunalsanga](https://github.com/kunalsanga)

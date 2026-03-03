@@ -9,3 +9,5 @@ dist/
 build/
 .idea/
 .vscode/
+.gemini/
+experiments/bottleneck_analysis.txt
