@@ -211,7 +211,7 @@ On IBM Quantum and Google hardware, CNOT gates exhibit ~10× higher error rates 
 
 - **Random search** plateaus quickly — no feedback mechanism to refine proposals
 - **Evolutionary search** stalls structurally due to lack of crossover and diversity collapse under elitism
-- **LLM-guided search** demonstrates sample-efficient convergence by conditioning proposals on the full evaluation history
+- **LLM-guided search** achieves competitive performance with fewer evaluations compared to baseline strategies, by conditioning proposals on the full evaluation history
 
 ### Multi-Seed Benchmarking
 
