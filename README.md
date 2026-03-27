@@ -329,7 +329,7 @@ rule_based_generate_architecture(history) → architecture  # heuristic baseline
 ## ⚠️ Current Limitations
 
 - **Small search space**: Fixed at 3 qubits with a maximum of 4 layers. The combinatorial space (~324 modular architectures) is tractable for random search, limiting the advantage demonstrated by LLM guidance.
-- **Synthetic dataset**: Evaluated on `make_moons` (2D, 20 samples) rather than real HEP data.
+- **Synthetic dataset**: Evaluated on `make_moons` (2D, 200 samples) rather than real HEP data.
 - **Single objective**: While hardware-aware, the scoring does not incorporate noise simulation, gate fidelity variation, or qubit connectivity constraints.
 - **LLM consistency**: The local LLM (Qwen 2.5) occasionally proposes architectures that are structurally similar across iterations. Temperature and sampling parameters are not yet tuned.
 - **No crossover in evolutionary search**: The 1+λ strategy uses only mutation, limiting its ability to combine good substructures from different architectures.
