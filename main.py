@@ -7,7 +7,7 @@ from llm_search import run_llm_search
 from comparison_plot import plot_comparison
 
 # ── Dataset ───────────────────────────────────────────────────────────────────
-X, y = make_moons(n_samples=30, noise=0.1)
+X, y = make_moons(n_samples=200, noise=0.1)
 X = np.pi * (X - X.min()) / (X.max() - X.min())
 y = 2 * y - 1
 

@@ -1,6 +1,11 @@
 # 🔬 QMLHEP — LLM-Guided VQC Architecture Search
 
-> **A reproducible, feedback-driven framework for Variational Quantum Circuit (VQC) architecture search using real LLM reasoning, built with [PennyLane](https://pennylane.ai/).**
+> This repository is the preliminary implementation for the
+> ML4SCI QMLHEP GSoC 2026 project **"Quantum Circuit Design
+> with LLMs"**, demonstrating the agentic closed-loop VQC
+> architecture search framework described in the proposal.
+
+> **A reproducible, feedback-driven framework for Variational Quantum Circuit (VQC) architecture search using a rule-based simulated LLM agent (with real LLM integration planned during GSoC), built with [PennyLane](https://pennylane.ai/).**
 
 Inspired by the **QMLHEP** (Quantum Machine Learning for High Energy Physics) initiative, this project implements and benchmarks **four search strategies** for discovering optimal quantum circuit architectures — ranging from stochastic baselines to a closed-loop LLM agent that reasons over historical performance feedback via a local [Ollama](https://ollama.com/) instance.
 
@@ -205,7 +210,7 @@ On IBM Quantum and Google hardware, CNOT gates exhibit ~10× higher error rates 
 |---|---|---|---|
 | Random Search | 0.7115 | 8 | No refinement, pure stochastic sampling |
 | Evolutionary | 0.6995 | 16 | Stalls when all mutations score worse than parent |
-| **LLM-Guided** | **0.7037** | **6** | Achieves competitive score with fewest evaluations |
+| **LLM-Guided** | **0.7037** | **6** | Best sample efficiency — reaches competitive performance in 6 evals vs 8 (random) and 16 (evolutionary) |
 
 ### Convergence Behaviour
 
@@ -240,6 +245,10 @@ Every LLM call is logged in `experiments/llm_reasoning_trace.json` with the foll
 ```
 
 This provides a complete audit trail of the LLM agent's reasoning for analysis, reproducibility, and interpretability.
+
+## 📈 Results Preview
+
+![Convergence Comparison](comparison_plot.png)
 
 ---
 
